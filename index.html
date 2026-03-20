@@ -265,6 +265,16 @@
                         <a href="${data.image_url}" download="ai-image.png" class="download-btn">
                             ⬇️ 下載圖片
                         </a>
+                        <p style="margin-top:10px;font-size:12px;color:#666">來源：${data.source || 'MiniMax'}</p>
+                    `;
+                } else if (data.image_data) {
+                    result.innerHTML = `
+                        <img src="data:image/png;base64,${data.image_data}" alt="生成的圖片">
+                        <br>
+                        <a href="data:image/png;base64,${data.image_data}" download="ai-image.png" class="download-btn">
+                            ⬇️ 下載圖片
+                        </a>
+                        <p style="margin-top:10px;font-size:12px;color:#666">來源：${data.source || 'Gemini'}</p>
                     `;
                 } else {
                     throw new Error('無法生成圖片');
