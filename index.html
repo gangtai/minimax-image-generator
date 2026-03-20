@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 圖片生成器 - 超級偵探訓練營</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Comic Sans MS', 'Microsoft JhengHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .input-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: bold;
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 3px solid #667eea;
+            border-radius: 12px;
+            font-size: 16px;
+            min-height: 100px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #764ba2;
+            box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+        }
+        
+        .examples {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .example-btn {
+            background: #f0f0f0;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .example-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .generate-btn {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .generate-btn:hover {
+            transform: scale(1.02);
+        }
+        
+        .generate-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .result {
+            margin-top: 30px;
+            text-align: center;
+        }
+        
+        .result img {
+            max-width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .download-btn {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 12px 30px;
+            background: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #ff4444;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .credits {
+            text-align: center;
+            margin-top: 30px;
+            color: #999;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 AI 圖片生成器</h1>
+        <p class="subtitle">超級偵探訓練營 - 秘密造假任務</p>
+        
+        <div class="input-group">
+            <label>🔑 密碼：</label>
+            <input type="password" id="password" placeholder="請輸入志工提供的密碼" style="width: 100%; padding: 15px; border: 3px solid #667eea; border-radius: 12px; font-size: 16px;">
+        </div>
+        
+        <div class="input-group">
+            <label>📝 描述你想要生成的圖片：</label>
+            <textarea id="prompt" placeholder="例如：一只紅色恐龍在太空中飛翔，超真實風格"></textarea>
+        </div>
+        
+        <div class="examples">
+            <button class="example-btn" onclick="setPrompt('一隻紅色恐龍在森林裡')">🦕 紅色恐龍</button>
+            <button class="example-btn" onclick="setPrompt('一隻會說話的貓在沙發上')">🐱 說話貓</button>
+            <button class="example-btn" onclick="setPrompt('未來城市有很多飛車')">🏙️ 未來城市</button>
+            <button class="example-btn" onclick="setPrompt('一隻可愛的熊貓在吃竹子')">🐼 熊貓</button>
+        </div>
+        
+        <button class="generate-btn" onclick="generateImage()" id="generateBtn">
+            ✨ 生成圖片
+        </button>
+        
+        <div class="loading" id="loading">
+            <div class="loading-spinner"></div>
+            <p>AI 正在生成圖片中... ⏳</p>
+        </div>
+        
+        <div class="error" id="error"></div>
+        
+        <div class="result" id="result"></div>
+        
+        <div class="credits">
+            由 MiniMax Image-01 驅動 | 超級偵探訓練營
+        </div>
+    </div>
+    
+    <script>
+        function setPrompt(text) {
+            document.getElementById('prompt').value = text;
+        }
+        
+        async function generateImage() {
+            const password = document.getElementById('password').value.trim();
+            const prompt = document.getElementById('prompt').value.trim();
+            const generateBtn = document.getElementById('generateBtn');
+            const loading = document.getElementById('loading');
+            const result = document.getElementById('result');
+            const error = document.getElementById('error');
+            
+            if (!password) {
+                alert('請輸入密碼！');
+                return;
+            }
+            
+            if (!prompt) {
+                alert('請輸入圖片描述！');
+                return;
+            }
+            
+            // Reset UI
+            error.style.display = 'none';
+            result.innerHTML = '';
+            generateBtn.disabled = true;
+            loading.style.display = 'block';
+            
+            try {
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ password, prompt })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                if (data.image_url) {
+                    result.innerHTML = `
+                        <img src="${data.image_url}" alt="生成的圖片">
+                        <br>
+                        <a href="${data.image_url}" download="ai-image.png" class="download-btn">
+                            ⬇️ 下載圖片
+                        </a>
+                    `;
+                } else {
+                    throw new Error('無法生成圖片');
+                }
+            } catch (err) {
+                error.textContent = '❌ 發生錯誤：' + err.message;
+                error.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+                generateBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

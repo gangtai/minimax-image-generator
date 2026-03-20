@@ -1,0 +1,10 @@
+{
+  "name": "minimax-image-generator",
+  "version": "1.0.0",
+  "description": "AI Image Generator for Super Detective Training Camp",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {}
+}
