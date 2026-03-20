@@ -1,7 +1,6 @@
 // Vercel Serverless Function for MiniMax Image Generation
-// API Key from Environment Variable (NOT in source code!)
+// API Key and Password from Environment Variables (NOT in source code!)
 
-const PASSWORD = '55666566';
 const RATE_LIMIT = 10;
 const RATE_LIMIT_WINDOW = 60 * 60 * 1000;
 
@@ -53,12 +52,12 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
     
-    // 從環境變數讀取 API Key（不在程式碼中！）
+    // 從環境變數讀取（不在程式碼中！）
     const API_KEY = process.env.MINIMAX_API_KEY;
+    const PASSWORD = process.env.APP_PASSWORD;
     
-    if (!API_KEY) {
-        return res.status(500).json({ error: '伺服器設定錯誤，請聯絡管理員' });
-    }
+    if (!API_KEY) return res.status(500).json({ error: '伺服器設定錯誤，請聯絡管理員' });
+    if (!PASSWORD) return res.status(500).json({ error: '密碼未設定，請聯絡管理員' });
     
     const { password, prompt } = req.body;
     const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || 'unknown';
