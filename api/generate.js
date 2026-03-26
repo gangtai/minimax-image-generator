@@ -1,7 +1,6 @@
 // Vercel Serverless Function for Image Generation
-// Supports: MiniMax, Gemini, and Cloudflare Workers AI (Stable Diffusion XL Lightning)
+// Supports: Cloudflare Workers AI (SDXL), MiniMax, and Gemini
 
-// Rate limiting
 const RATE_LIMIT = 10;
 const RATE_LIMIT_WINDOW = 60 * 60 * 1000;
 const rateLimitStore = new Map();
@@ -28,7 +27,6 @@ function checkRateLimit(ip) {
     return true;
 }
 
-// Content filtering
 const BLOCKED_KEYWORDS = [
     'violence', 'nude', 'nsfw', 'porn', 'sex',
     'weapon', 'blood', 'gore', 'kill', 'death',
@@ -65,10 +63,9 @@ async function generateWithCloudflare(prompt, apiToken, accountId) {
     const data = await response.json();
     
     if (!response.ok || data.errors) {
-        throw new Error(data.errors?.[0]?.message || 'Cloudflare API error');
+        throw new Error(data.errors?.[0]?.message || `Cloudflare API error: ${response.status}`);
     }
     
-    // Cloudflare returns base64 encoded image
     return data.result?.image;
 }
 
@@ -137,39 +134,42 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
     
-    // 讀取環境變數
     const CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
     const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
     const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY;
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
     const PASSWORD = process.env.APP_PASSWORD;
     
-    if (!PASSWORD) return res.status(500).json({ error: '密碼未設定，請聯絡管理員' });
+    if (!PASSWORD) return res.status(500).json({ error: 'Password not set' });
     
     const { password, prompt } = req.body;
     const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || 'unknown';
     
-    // 驗證密碼
     if (password !== PASSWORD) {
-        return res.status(401).json({ error: '密碼錯誤，請聯絡志工取得正確密碼' });
+        return res.status(401).json({ error: 'Password incorrect' });
     }
     
-    // 速率限制
     if (!checkRateLimit(ip)) {
-        return res.status(429).json({ error: '請求次數過多，請稍後再試' });
+        return res.status(429).json({ error: 'Rate limit exceeded' });
     }
     
-    // 驗證 prompt
-    if (!prompt) return res.status(400).json({ error: '請輸入 prompt' });
-    if (prompt.length > 200) return res.status(400).json({ error: 'Prompt 太長，請少於 200 字' });
-    if (!checkContent(prompt)) return res.status(400).json({ error: 'Prompt 包含不當內容，請更換描述' });
+    if (!prompt) return res.status(400).json({ error: 'No prompt provided' });
+    if (prompt.length > 200) return res.status(400).json({ error: 'Prompt too long' });
+    if (!checkContent(prompt)) return res.status(400).json({ error: 'Prompt contains blocked content' });
     
-    // 嘗試順序：Cloudflare (SDXL) -> MiniMax -> Gemini
     let lastError = null;
+    const debug = {
+        env: {
+            cloudflare: !!(CLOUDFLARE_API_TOKEN && CLOUDFLARE_ACCOUNT_ID),
+            minimax: !!MINIMAX_API_KEY,
+            gemini: !!GEMINI_API_KEY
+        }
+    };
     
     // 1. Cloudflare Workers AI (Stable Diffusion XL Lightning)
     if (CLOUDFLARE_API_TOKEN && CLOUDFLARE_ACCOUNT_ID) {
         try {
+            console.log('Trying Cloudflare with account:', CLOUDFLARE_ACCOUNT_ID);
             const result = await generateWithCloudflare(prompt, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID);
             if (result) {
                 return res.status(200).json({
@@ -187,6 +187,7 @@ export default async function handler(req, res) {
     // 2. MiniMax
     if (MINIMAX_API_KEY) {
         try {
+            console.log('Trying MiniMax...');
             const result = await generateWithMiniMax(prompt, MINIMAX_API_KEY);
             return res.status(200).json({
                 success: true,
@@ -202,11 +203,11 @@ export default async function handler(req, res) {
     // 3. Gemini (failover)
     if (GEMINI_API_KEY) {
         try {
+            console.log('Trying Gemini...');
             const result = await generateWithGemini(prompt, GEMINI_API_KEY);
             return res.status(200).json({
                 success: true,
                 image_data: result.data,
-                image_url: result.type === 'url' ? result.url : null,
                 source: 'gemini'
             });
         } catch (error) {
@@ -215,10 +216,11 @@ export default async function handler(req, res) {
         }
     }
     
-    // 全部失敗
-    console.log('Last error:', lastError);
+    // All failed
+    console.log('All services failed. Last error:', lastError);
     return res.status(503).json({
-        error: '所有圖片生成服務暫時無法使用，請稍後再試',
-        details: lastError
+        error: 'All image services unavailable',
+        debug: debug,
+        lastError: lastError
     });
 }
