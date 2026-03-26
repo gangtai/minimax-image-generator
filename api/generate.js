@@ -35,10 +35,25 @@ function checkContent(prompt) {
     return true;
 }
 
+// Detect if text contains Chinese characters
+function isChinese(text) {
+    return /[\u4e00-\u9fff]/.test(text);
+}
+
+// Translate using Google Translate API (free)
+async function translateToEnglish(text) {
+    console.log('Translating to English:', text.substring(0, 50));
+    const response = await fetch(
+        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(text)}`
+    );
+    const data = await response.json();
+    const translation = data[0][0][0];
+    console.log('Translation result:', translation);
+    return translation;
+}
+
 // Cloudflare Workers AI - Stable Diffusion XL Lightning
 async function generateWithCloudflare(prompt, apiToken, accountId) {
-    console.log('DEBUG: Cloudflare called, accountId:', accountId);
-    
     const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning`;
     
     const response = await fetch(url, {
@@ -50,18 +65,15 @@ async function generateWithCloudflare(prompt, apiToken, accountId) {
         body: JSON.stringify({ prompt: prompt })
     });
     
-    console.log('DEBUG: Cloudflare status:', response.status);
     const contentType = response.headers.get('content-type');
     
     if (contentType && contentType.includes('image')) {
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
-        console.log('DEBUG: Cloudflare image OK, size:', buffer.byteLength);
         return base64;
     }
     
     const data = await response.json();
-    console.log('DEBUG: Cloudflare response:', JSON.stringify(data).substring(0, 200));
     throw new Error(data.errors?.[0]?.message || 'Cloudflare failed');
 }
 
@@ -124,14 +136,6 @@ export default async function handler(req, res) {
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
     const PASSWORD = process.env.APP_PASSWORD;
     
-    console.log('DEBUG env:', {
-        cf: !!CLOUDFLARE_API_TOKEN,
-        cfId: !!CLOUDFLARE_ACCOUNT_ID,
-        mini: !!MINIMAX_API_KEY,
-        gem: !!GEMINI_API_KEY,
-        pwd: !!PASSWORD
-    });
-    
     if (!PASSWORD) return res.status(500).json({ error: 'Password not set' });
     
     const { password, prompt } = req.body;
@@ -143,15 +147,35 @@ export default async function handler(req, res) {
     if (prompt.length > 200) return res.status(400).json({ error: 'Prompt too long' });
     if (!checkContent(prompt)) return res.status(400).json({ error: 'Prompt contains blocked content' });
     
+    let englishPrompt = prompt;
+    let translated = false;
+    
+    // Translate to English if prompt contains Chinese
+    if (isChinese(prompt)) {
+        try {
+            englishPrompt = await translateToEnglish(prompt);
+            translated = true;
+            console.log('Original prompt:', prompt);
+            console.log('English prompt:', englishPrompt);
+        } catch (e) {
+            console.log('Translation failed, using original:', e.message);
+        }
+    }
+    
     let lastError = null;
     
     // 1. Cloudflare
     if (CLOUDFLARE_API_TOKEN && CLOUDFLARE_ACCOUNT_ID) {
         try {
-            const result = await generateWithCloudflare(prompt, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID);
-            return res.status(200).json({ success: true, image_data: result, source: 'cloudflare' });
+            const result = await generateWithCloudflare(englishPrompt, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID);
+            return res.status(200).json({ 
+                success: true, 
+                image_data: result, 
+                source: 'cloudflare',
+                originalPrompt: translated ? prompt : null,
+                englishPrompt: translated ? englishPrompt : null
+            });
         } catch (e) {
-            console.log('DEBUG: Cloudflare failed:', e.message);
             lastError = 'Cloudflare: ' + e.message;
         }
     }
@@ -159,10 +183,15 @@ export default async function handler(req, res) {
     // 2. MiniMax
     if (MINIMAX_API_KEY) {
         try {
-            const result = await generateWithMiniMax(prompt, MINIMAX_API_KEY);
-            return res.status(200).json({ success: true, image_url: result.url, source: 'minimax' });
+            const result = await generateWithMiniMax(englishPrompt, MINIMAX_API_KEY);
+            return res.status(200).json({ 
+                success: true, 
+                image_url: result.url, 
+                source: 'minimax',
+                originalPrompt: translated ? prompt : null,
+                englishPrompt: translated ? englishPrompt : null
+            });
         } catch (e) {
-            console.log('DEBUG: MiniMax failed:', e.message);
             lastError = 'MiniMax: ' + e.message;
         }
     }
@@ -170,22 +199,21 @@ export default async function handler(req, res) {
     // 3. Gemini
     if (GEMINI_API_KEY) {
         try {
-            const result = await generateWithGemini(prompt, GEMINI_API_KEY);
-            return res.status(200).json({ success: true, image_data: result.data, source: 'gemini' });
+            const result = await generateWithGemini(englishPrompt, GEMINI_API_KEY);
+            return res.status(200).json({ 
+                success: true, 
+                image_data: result.data, 
+                source: 'gemini',
+                originalPrompt: translated ? prompt : null,
+                englishPrompt: translated ? englishPrompt : null
+            });
         } catch (e) {
-            console.log('DEBUG: Gemini failed:', e.message);
             lastError = 'Gemini: ' + e.message;
         }
     }
     
     return res.status(503).json({
         error: 'All services failed',
-        lastError: lastError,
-        env: {
-            cf: !!CLOUDFLARE_API_TOKEN,
-            cfId: !!CLOUDFLARE_ACCOUNT_ID,
-            mini: !!MINIMAX_API_KEY,
-            gem: !!GEMINI_API_KEY
-        }
+        lastError: lastError
     });
 }
