@@ -48,7 +48,7 @@ function checkContent(prompt) {
 // Cloudflare Workers AI - Stable Diffusion XL Lightning
 async function generateWithCloudflare(prompt, apiToken, accountId) {
     const response = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers ai/run`,
+        `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers_ai/run`,
         {
             method: 'POST',
             headers: {
