@@ -139,10 +139,11 @@ export default async function handler(req, res) {
     if (!PASSWORD) return res.status(500).json({ error: 'Password not set' });
     
     const { password, prompt } = req.body;
-    const ip = req.headers['x-forwarded-for']?.split(',')[0] || 'unknown';
+    // Rate limit removed for camp usage
+    // const ip = req.headers['x-forwarded-for']?.split(',')[0] || 'unknown';
     
     if (password !== PASSWORD) return res.status(401).json({ error: 'Password incorrect' });
-    if (!checkRateLimit(ip)) return res.status(429).json({ error: 'Rate limit exceeded' });
+    // if (!checkRateLimit(ip)) return res.status(429).json({ error: 'Rate limit exceeded' });
     if (!prompt) return res.status(400).json({ error: 'No prompt' });
     if (prompt.length > 200) return res.status(400).json({ error: 'Prompt too long' });
     if (!checkContent(prompt)) return res.status(400).json({ error: 'Prompt contains blocked content' });
